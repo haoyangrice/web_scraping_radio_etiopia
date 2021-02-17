@@ -20,7 +20,7 @@ num_pages = 82
 page_links = [site_root+F'?p={ii}' for ii in range(1,83)]
 
 # For testing, just use the first page. Comment out the line below to scrape all pages.
-page_links = page_links[0]
+page_links = page_links[0:1]
 
 # Loop through the pages to get the URLs of each episode, using regex to extract the Permalinks.
 # Save them to a dict with the key being the page number.
@@ -42,6 +42,7 @@ for one_page in page_links:
     key = f"p{int(one_page.split('=')[1]):02d}"
     episode_links[key] = links
     print(F'Finished ...{key}')
+    # Sleep for some time. I don't even know if it's necessary.
     time.sleep(15)
 
 
@@ -69,7 +70,8 @@ episode_df = pd.DataFrame.from_dict(all_episodes, orient='index', columns=['desc
 
 # Download the mp3s.
 
-# For recent episodes, when it is available, download the file from podomatic.
+# For recent episodes, when it is available, download the file from podomatic. This option is
+# available going back to May, 2017.
 failure = []
 success = []
 for index, _ in episode_df.loc[:'2017-05-25T12_00_00-07_00'].iterrows():
@@ -86,7 +88,8 @@ for index, _ in episode_df.loc[:'2017-05-25T12_00_00-07_00'].iterrows():
         print('failed!')
     time.sleep(20)
 
-# For older episodes, parse out the filefactory links and see if they are still downloadable.
+# For older episodes before May 2017, parse out the filefactory links and see if they are still
+# downloadable.
 pattern = re.compile('(https?://www.filefactory.com/file/[^\s]+mp3)')
 episode_df['filefactory_link'] = episode_df['description'].str.extract(pattern)
 
@@ -95,16 +98,20 @@ not_downloaded = []
 for indx, (_, ffactory_link, _) in episode_df.loc['2017-05-18T13_00_00-07_00':'2011-07-03T12_42_57-07_00'].iloc[::-1].iterrows():
     if pd.notnull(ffactory_link):
         response = r.get(ffactory_link)
+        # If the response is not an HTML document, it means that we get the binary data for the
+        # mp3 file.
         if response.content[:9] != b'<!DOCTYPE':
             with open(indx+'.mp3', 'wb') as f:
                 f.write(response.content)
             print(f"{indx}: Downloaded...{indx}.mp3")
             time.sleep(5)
+        # Otherwise, the link no longer works. At least we still have the artist and song info.
         else:
             print(f"{indx}: The filefactory link is no longer valid.")
             not_downloaded.append(indx)
             time.sleep(3)
     else:
+        # Some episodes don't have the download URLs.
         print(f"{indx}: No filefactory link aviable.")
         not_downloaded.append(indx)
         time.sleep(1)
